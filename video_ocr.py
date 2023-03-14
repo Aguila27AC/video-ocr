@@ -184,12 +184,14 @@ if __name__ == '__main__':
     parser.add_argument("ruta_video", help="Ruta del archivo de video")
     parser.add_argument("salto_fotograma", type=int, help="Salto fotograma")
     parser.add_argument("--region", help="Marcar region interes", action="store_true")
+    parser.add_argument("--traducir", help="Traducir subtitulos", action="store_true")
 
     args = parser.parse_args()
 
     ruta_video = args.ruta_video
     salto_fotograma = args.salto_fotograma
     marcar_region_interes = args.region
+    traducir = args.traducir
 
     if not ruta_video or not salto_fotograma:
         print("Faltan parámetros necesarios")
@@ -208,4 +210,5 @@ if __name__ == '__main__':
 
         subtitulos_a_srt(subtitulos, ruta_video_sin_extension + "_" + str(salto_fotograma) + ".en.srt")
 
-        subtitulos_a_srt(traducir_subtitulos(subtitulos), ruta_video_sin_extension + "_" + str(salto_fotograma) + ".es.srt")
+        if traducir:
+            subtitulos_a_srt(traducir_subtitulos(subtitulos), ruta_video_sin_extension + "_" + str(salto_fotograma) + ".es.srt")
