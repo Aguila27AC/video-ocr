@@ -1,3 +1,5 @@
+import argparse
+import os
 import re
 import cv2
 import pytesseract
@@ -9,9 +11,11 @@ pytesseract.pytesseract.tesseract_cmd = r'C:/Program Files/Tesseract-OCR/tessera
 
 def extraer_subtitulos(ruta_video, salto_fotograma, marcar_region_interes):
 
+    print(f"[ ] Extrayendo subtitulos...", end="\r")
+
     if marcar_region_interes:
         inicio_x, inicio_y, fin_x, fin_y = ri.marcar_region_interes(ruta_video)
-        print([inicio_x, inicio_y, fin_x, fin_y])
+        #print([inicio_x, inicio_y, fin_x, fin_y])
     else:
         inicio_x, inicio_y, fin_x, fin_y = [346, 906, 1460, 1053]
 
@@ -26,6 +30,10 @@ def extraer_subtitulos(ruta_video, salto_fotograma, marcar_region_interes):
 
     # Obtener la tasa de fotogramas por segundo
     fps = video.get(cv2.CAP_PROP_FPS)
+
+    # Obtiene el número total de fotogramas
+    total_fotogramas = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    total_fotogramas = int(total_fotogramas/salto_fotograma)
 
     #Crear lista_fotograma_texto
     subtitulos = []
@@ -53,19 +61,23 @@ def extraer_subtitulos(ruta_video, salto_fotograma, marcar_region_interes):
 
             texto = texto.replace("\n", " ").strip()
 
-            # Mostrar el texto en la consola
-            print(str(numero_fotograma) + ": " + texto)
-
             subtitulos.append([numero_fotograma, numero_fotograma, texto])
+
+            # Mostrar el texto en la consola
+            print(f"[ ] Extrayendo subtitulos... Fotogramas leidos: {numero_fotograma}/{total_fotogramas}", end="\r")
 
             numero_fotograma += 1
 
         # Aumentar contador
         contador_fotogramas += 1
+    
+    print(f"[x] Extrayendo subtitulos: Completado")
 
     return subtitulos, fps
 
 def simplificar_subtitulos(subtitulos):
+    print(f"[ ] Simplificando subtitulos...", end="\r")
+
     i = len(subtitulos) - 1
     while i > -1:
         fotograma_inicio, fotograma_final, texto = subtitulos[i]
@@ -87,9 +99,13 @@ def simplificar_subtitulos(subtitulos):
 
         i -= 1
     
+    print(f"[x] Simplificando subtitulos: Completado")
+    
     return subtitulos
 
 def calcular_tiempo_subtitulos(subtitulos, fps, salto_fotograma):
+    print(f"[ ] Calculando tiempo subtitulos...", end="\r")
+
     fps = fps / salto_fotograma
 
     for subtitulo in subtitulos:
@@ -97,9 +113,12 @@ def calcular_tiempo_subtitulos(subtitulos, fps, salto_fotograma):
         subtitulo[0] = datetime.min + timedelta(seconds=subtitulo[0] / fps)
         subtitulo[1] = datetime.min + timedelta(seconds=((subtitulo[1]) + 1) / fps)
 
+    print(f"[x] Calculando tiempo subtitulos: Completado")
+
     return subtitulos
 
-def traducir_subtitulos(subtitulos):    
+def traducir_subtitulos(subtitulos):
+    print(f"[ ] Traduciendo subtitulos...", end='\r')
 
     traductor = Translator()
 
@@ -107,14 +126,22 @@ def traducir_subtitulos(subtitulos):
         texto_traducido = traductor.translate(text=subtitulo[2], src='en', dest='es').text
         subtitulo[2] = texto_traducido
 
+    print(f"[x] Traduciendo subtitulos: Completado")
+
     return subtitulos
 
 def subtitulos_a_txt(subtitulos, nombre_archivo):
+    print(f"[ ] Guardando a txt...", end='\r')
+
     with open(nombre_archivo, "w", encoding="utf-8") as archivo:
         for subtitulo in subtitulos:
             archivo.write(f"{subtitulo[0]}-{subtitulo[1]}: {subtitulo[2]}\n")
 
+    print(f"[x] Guardando a txt: Completado")
+
 def subtitulos_a_srt(subtitulos, nombre_archivo):
+    print(f"[ ] Guardando a srt...", end='\r')
+
     with open(nombre_archivo, "w", encoding="utf-8") as archivo:
         i = 1
         for subtitulo in subtitulos:
@@ -128,6 +155,8 @@ def subtitulos_a_srt(subtitulos, nombre_archivo):
             archivo.write(f"{subtitulo[2]}\n\n")
 
             i += 1
+
+    print(f"[x] Guardando a srt: Completado")
 
 def subtitulos_desde_txt(nombre_archivo):
     # Abre el archivo txt y lee cada línea
@@ -150,14 +179,33 @@ def subtitulos_desde_txt(nombre_archivo):
 
     return subtitulos
 
-titulo = "death"
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("ruta_video", help="Ruta del archivo de video")
+    parser.add_argument("salto_fotograma", type=int, help="Salto fotograma")
+    parser.add_argument("--region", help="Marcar region interes", action="store_true")
 
-salto_fotograma = 30
+    args = parser.parse_args()
 
-subtitulos, fps = extraer_subtitulos(titulo + ".mp4", salto_fotograma, False)
+    ruta_video = args.ruta_video
+    salto_fotograma = args.salto_fotograma
+    marcar_region_interes = args.region
 
-subtitulos_a_txt(subtitulos, titulo + "_raw_subtitle_30.txt")
+    if not ruta_video or not salto_fotograma:
+        print("Faltan parámetros necesarios")
+    else:
+        subtitulos, fps = extraer_subtitulos(ruta_video, salto_fotograma, marcar_region_interes)
 
-#subtitulos_a_srt(simplificar_subtitulos(calcular_tiempo_subtitulos(subtitulos, fps, salto_fotograma)), titulo + ".en.srt")
+        ruta_video_sin_extension = os.path.splitext(os.path.basename(ruta_video))[0]
 
-subtitulos_a_srt(traducir_subtitulos(simplificar_subtitulos(calcular_tiempo_subtitulos(subtitulos, fps, salto_fotograma))), titulo + ".es.srt")
+        subtitulos_a_txt(subtitulos, ruta_video_sin_extension + "_raw_subtitle_" + str(salto_fotograma) + ".txt")
+
+        subtitulos = simplificar_subtitulos(subtitulos)
+
+        subtitulos_a_txt(subtitulos, ruta_video_sin_extension + "_raw_s_subtitle_" + str(salto_fotograma) + ".txt")
+
+        calcular_tiempo_subtitulos(subtitulos, fps, salto_fotograma)
+
+        subtitulos_a_srt(subtitulos, ruta_video_sin_extension + "_" + str(salto_fotograma) + ".en.srt")
+
+        subtitulos_a_srt(traducir_subtitulos(subtitulos), ruta_video_sin_extension + "_" + str(salto_fotograma) + ".es.srt")
