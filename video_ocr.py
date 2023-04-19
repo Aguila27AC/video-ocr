@@ -3,13 +3,82 @@ import os
 import re
 import cv2
 import pytesseract
+import easyocr
 from datetime import datetime, timedelta
 import region_interes as ri
 from googletrans import Translator
 
 pytesseract.pytesseract.tesseract_cmd = r'C:/Program Files/Tesseract-OCR/tesseract.exe'
 
-def extraer_subtitulos(ruta_video, salto_fotograma, marcar_region_interes):
+def extraer_subtitulos_easyocr(ruta_video, salto_fotograma, marcar_region_interes):
+
+    print(f"[ ] Extrayendo subtitulos...", end="\r")
+
+    if marcar_region_interes:
+        inicio_x, inicio_y, fin_x, fin_y = ri.marcar_region_interes(ruta_video)
+        print("Coordenadas: " + str([inicio_x, inicio_y, fin_x, fin_y]) + "\n")
+    else:
+        inicio_x, inicio_y, fin_x, fin_y = [300, 905, 1620, 1045]
+
+    if inicio_x > fin_x:
+        inicio_x, fin_x = fin_x, inicio_x
+
+    if inicio_y > fin_y:
+        inicio_y, fin_y = fin_y, inicio_y
+
+    reader = easyocr.Reader(model_storage_directory="english_g2", lang_list=["en"], gpu=True)
+
+    # Abrir el video
+    video = cv2.VideoCapture(ruta_video)
+
+    # Obtener la tasa de fotogramas por segundo
+    fps = video.get(cv2.CAP_PROP_FPS)
+
+    # Obtiene el número total de fotogramas
+    total_fotogramas = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    total_fotogramas = int(total_fotogramas/salto_fotograma)
+
+    #Crear lista_fotograma_texto
+    subtitulos = []
+
+    numero_fotograma = 1
+    contador_fotogramas = 1
+
+    while True:
+        # Leer el siguiente fotograma del video
+        ret, fotograma = video.read()
+
+        # Salir del ciclo si se llega al final del video
+        if not ret:
+            break
+
+        if contador_fotogramas%salto_fotograma == 0:
+            # Recortar la región de interés del fotograma
+            region_interes = fotograma[inicio_y:fin_y, inicio_x:fin_x]
+
+            # Convertir la región de interés a escala de grises
+            region_interes_gris = cv2.cvtColor(region_interes, cv2.COLOR_BGR2GRAY)
+
+            # Aplicar OCR al fotograma
+            texto = " ".join(reader.readtext(region_interes_gris, detail=0, paragraph=True))
+
+            texto = texto.replace("\n", " ").strip()
+
+            subtitulos.append([numero_fotograma, numero_fotograma, texto])
+
+            # Mostrar el texto en la consola
+            print(f"[ ] Extrayendo subtitulos... Fotogramas leidos: {numero_fotograma}/{total_fotogramas}", end="\r")
+
+            numero_fotograma += 1
+
+        # Aumentar contador
+        contador_fotogramas += 1
+    
+    print(f"[x] Extrayendo subtitulos: Completado")
+
+    return subtitulos, fps
+
+def extraer_subtitulos_tesseract(ruta_video, salto_fotograma, marcar_region_interes):
 
     print(f"[ ] Extrayendo subtitulos...", end="\r")
 
@@ -57,7 +126,7 @@ def extraer_subtitulos(ruta_video, salto_fotograma, marcar_region_interes):
             #region_interes_gris = cv2.cvtColor(region_interes, cv2.COLOR_BGR2GRAY)
 
             # Aplicar OCR al fotograma
-            texto = pytesseract.image_to_string(region_interes, lang='eng')
+            texto = pytesseract.image_to_string(region_interes, lang='eng', config='-c tessedit_char_blacklist=~|_')
 
             texto = texto.replace("\n", " ").strip()
 
@@ -196,7 +265,7 @@ if __name__ == '__main__':
     if not ruta_video or not salto_fotograma:
         print("Faltan parámetros necesarios")
     else:
-        subtitulos, fps = extraer_subtitulos(ruta_video, salto_fotograma, marcar_region_interes)
+        subtitulos, fps = extraer_subtitulos_easyocr(ruta_video, salto_fotograma, marcar_region_interes)
 
         ruta_video_sin_extension = os.path.splitext(os.path.basename(ruta_video))[0]
 
